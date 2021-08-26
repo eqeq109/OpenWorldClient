@@ -175,15 +175,10 @@ void AGameTcpSocketConnection::SendNickname(const FString& message)
 
 	FPacketSetNicknameReq packet;
 
-	packet.UserName = message;//TCHAR_TO_UTF8(*message);
-	
-	//기존 구조체 직렬화
-	/*FBufferArchive archive(true);
-	FPacketSetNicknameReq::StaticStruct()->SerializeBin(archive, &packet);*/
+	packet.UserName = message;
 
-	//TArray<uint8> data = archive;
-
-	//구조체 json 직렬화(성능상 단점이 있지만 간편)
+	//구조체 json 직렬화(성능상 단점이 있지만 간편, FString 길이에 대해 일일히 지정할 필요가 없음)
+	//자주 송수신 되지 않는 패킷에 사용
 	FString json;
 	FJsonObjectConverter::UStructToJsonObjectString(packet, json, 0, 0);
 
