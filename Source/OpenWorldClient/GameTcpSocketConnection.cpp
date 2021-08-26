@@ -16,11 +16,12 @@
 #include "TcpSocketSettings.h"
 #include <Runtime/Core/Public/Serialization/BufferArchive.h>
 #include "OpenWorldClient/OpenWorldClientGameMode.h"
+#include <Runtime/JsonUtilities/Public/JsonObjectConverter.h>
 
 void AGameTcpSocketConnection::ConnectToGameServer()
 {
 	ConnectionIdGameServer = 0;
-	if (isConnected(ConnectionIdGameServer))
+	if (IsConnected(ConnectionIdGameServer))
 	{
 		UE_LOG(LogTemp, Log, TEXT("Log: Can't connect Second time. We're already connected!"));
 		return;
@@ -35,12 +36,12 @@ void AGameTcpSocketConnection::ConnectToGameServer()
 	Connect("222.107.110.135", 9000, ConnectionIdGameServer);
 }
 
-void AGameTcpSocketConnection::OnConnected(int32 ConId)
+void AGameTcpSocketConnection::OnConnected(int32 conId)
 {
 	UE_LOG(LogTemp, Log, TEXT("Log: Connected to server"));
 }
 
-void AGameTcpSocketConnection::OnDisconnected(int32 ConId)
+void AGameTcpSocketConnection::OnDisconnected(int32 conId)
 {
 	UE_LOG(LogTemp, Log, TEXT("Log: Disconnected"));
 }
@@ -50,35 +51,51 @@ void AGameTcpSocketConnection::OnDisconnected(int32 ConId)
 /// </summary>
 /// <param name="ConId"></param>
 /// <param name="Message"></param>
-void AGameTcpSocketConnection::OnMessageReceived(int32 ConId, TArray<uint8>& Message)
+void AGameTcpSocketConnection::OnMessageReceived(int32 conId, TArray<uint8>& message)
 {
 	UE_LOG(LogTemp, Log, TEXT("Log: Received message"));
 
-	while (Message.Num() != 0)
+	while (message.Num() != 0)
 	{
-		int32 header = Message_ReadInt(Message);
+		int32 header = PopInt(message);
 		if (header == -1)
 			return;
 		TArray<uint8> body;
-		if (!Message_ReadBytes(header, Message, body))
+		if (!PopBytes(header, message, body))
 		{
 			continue;
 		}
 		EProtocolType type;
-		type = (EProtocolType)Message_ReadInt16(body);
+		type = (EProtocolType)PopInt16(body);
+		FString stringData;
 		switch (type)
 		{
 		case EProtocolType::ChatMsgAck:
-			int16 msgLength = Message_ReadInt16(body);
+		{
+			int16 msgLength = PopInt16(body);
 
-			FString message = Message_ReadString(body, msgLength);
-			
-			ChatMessageDelegate.ExecuteIfBound(message);
+			stringData = PopString(body, msgLength);
+
+			ChatMessageDelegate.ExecuteIfBound(stringData);
+		}
 			break;
-		//case EProtocolType::SetNicknameAck:
-		//	/*AOpenWorldClientGameMode* gameMode = (AOpenWorldClientGameMode*)GetWorld()->GetAuthGameMode();
-		//	gameMode->OnSendNicknameAck()*/
-		//	break;
+		case EProtocolType::SetNicknameAck:
+		{
+			//AOpenWorldClientGameMode* gameMode = (AOpenWorldClientGameMode*)GetWorld()->GetAuthGameMode();
+			int16 msgLength = PopInt16(body);
+
+			stringData = PopString(body, msgLength);
+			FPacketSetNicknameAck ack;
+			//DeserializeJsonToStruct(&ack, stringData);
+			FJsonObjectConverter::JsonObjectStringToUStruct(stringData, &ack, 0, 0);
+			//gameMode->OnSendNicknameAck(ack.UserName);
+			//FBufferArchive archive();
+			//ack.StaticStruct().serial
+			//DeserializeObject((UObject)ack);
+			//ack.StaticStruct()
+			UE_LOG(LogTemp, Log, TEXT("Log: Received message"));
+		}
+			break;
 		}   
 	}
 }
@@ -95,18 +112,18 @@ void AGameTcpSocketConnection::SendMessage(const FString& message)
 	TArray<uint8> temp;
 	//프로토콜 타입
 	int16 type = (int16)EProtocolType::ChatMsgReq;
-	TArray<uint8> typeToBytes = Conv_Int16ToBytes(type);
+	TArray<uint8> typeToBytes = ConvInt16ToBytes(type);
 	temp.Append(typeToBytes);
 	//문자열 길이
 	int16 msgLength = (int16)message.Len();
-	TArray<uint8> msgLengthToBytes = Conv_Int16ToBytes(msgLength);
+	TArray<uint8> msgLengthToBytes = ConvInt16ToBytes(msgLength);
 	temp.Append(msgLengthToBytes);
 	//문자열 
-	TArray<uint8> msgToBytes = Conv_StringToBytes(message);
+	TArray<uint8> msgToBytes = ConvStringToBytes(message);
 	temp.Append(msgToBytes);
 	//전체 버퍼 길이
 	int32 header = temp.Num() + 4;
-	TArray<uint8> headerToBytes = Conv_IntToBytes(header);
+	TArray<uint8> headerToBytes = ConvIntToBytes(header);
 	buffer.Append(headerToBytes);
 	buffer.Append(temp);
 	SendData(0, buffer);
@@ -132,13 +149,13 @@ void AGameTcpSocketConnection::SendMove(const FVector& pos, const FRotator& rot)
 	TArray<uint8> temp;
 	//프로토콜 타입
 	int16 type = (int16)EProtocolType::PlayerMoveAck;
-	TArray<uint8> typeToBytes = Conv_Int16ToBytes(type);
+	TArray<uint8> typeToBytes = ConvInt16ToBytes(type);
 	temp.Append(typeToBytes);
 
 	temp.Append(data);
 	//전체 버퍼 길이
 	int32 header = temp.Num() + 4;
-	TArray<uint8> headerToBytes = Conv_IntToBytes(header);
+	TArray<uint8> headerToBytes = ConvIntToBytes(header);
 	buffer.Append(headerToBytes);
 	buffer.Append(temp);
 	SendData(0, buffer);
@@ -148,25 +165,41 @@ void AGameTcpSocketConnection::SendNickname(const FString& message)
 {
 	UE_LOG(LogTemp, Log, TEXT("Log: SendNickname"));
 
-	FPacketSetNicknameReq packet;
-
-	packet.UserName = TCHAR_TO_UTF8(*message);
-	
-	FBufferArchive archive(true);
-	FPacketSetNicknameReq::StaticStruct()->SerializeBin(archive, &packet);
-
-	TArray<uint8> data = archive;
 	TArray<uint8> buffer;
 	TArray<uint8> temp;
+
 	//프로토콜 타입
-	int16 type = (int16)EProtocolType::SetNicknameAck;
-	TArray<uint8> typeToBytes = Conv_Int16ToBytes(type);
+	int16 type = (int16)EProtocolType::SetNicknameReq;
+	TArray<uint8> typeToBytes = ConvInt16ToBytes(type);
 	temp.Append(typeToBytes);
 
-	temp.Append(data);
+	FPacketSetNicknameReq packet;
+
+	packet.UserName = message;//TCHAR_TO_UTF8(*message);
+	
+	//기존 구조체 직렬화
+	/*FBufferArchive archive(true);
+	FPacketSetNicknameReq::StaticStruct()->SerializeBin(archive, &packet);*/
+
+	//TArray<uint8> data = archive;
+
+	//구조체 json 직렬화(성능상 단점이 있지만 간편)
+	FString json;
+	FJsonObjectConverter::UStructToJsonObjectString(packet, json, 0, 0);
+
+
+	//문자열 길이
+	int16 msgLength = (int16)json.Len();
+	TArray<uint8> msgLengthToBytes = ConvInt16ToBytes(msgLength);
+	temp.Append(msgLengthToBytes);
+
+	//json 문자열
+	TArray<uint8> jsonToBytes = ConvStringToBytes(json);
+	temp.Append(jsonToBytes);
+
 	//전체 버퍼 길이
 	int32 header = temp.Num() + 4;
-	TArray<uint8> headerToBytes = Conv_IntToBytes(header);
+	TArray<uint8> headerToBytes = ConvIntToBytes(header);
 	buffer.Append(headerToBytes);
 	buffer.Append(temp);
 	SendData(0, buffer);

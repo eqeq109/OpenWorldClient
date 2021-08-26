@@ -4,7 +4,7 @@
 #include "TcpSocketConnection.h"
 #include "SocketSubsystem.h"
 #include "Interfaces/IPv4/IPv4Address.h"
-#include "IPAddress.h"
+#include "IpAddress.h"
 #include "Sockets.h"
 #include "HAL/RunnableThread.h"
 #include "Async/Async.h"
@@ -12,6 +12,8 @@
 #include "Logging/MessageLog.h"
 #include "HAL/UnrealMemory.h"
 #include "TcpSocketSettings.h"
+#include <Runtime/CoreUObject/Public/Serialization/ObjectAndNameAsStringProxyArchive.h>
+#include <Runtime/JsonUtilities/Public/JsonObjectConverter.h>
 //#include <Runtime/Networking/Public/Interfaces/IPv4/IPv4Address.h>
 
 // Sets default values
@@ -30,7 +32,7 @@ void ATcpSocketConnection::BeginPlay()
 void ATcpSocketConnection::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	TArray<int32> keys;
-	TcpWorkers.GetKeys(keys);
+	mTcpWorkers.GetKeys(keys);
 
 	for (auto& key : keys)
 	{
@@ -44,54 +46,54 @@ void ATcpSocketConnection::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 }
 
-void ATcpSocketConnection::Connect(const FString& ipAddress, int32 port, /*const FTcpSocketDisconnectDelegate& OnDisconnected, const FTcpSocketConnectDelegate& OnConnected,
-	const FTcpSocketReceivedMessageDelegate& OnMessageReceived,*/ int32& ConnectionId)
+void ATcpSocketConnection::Connect(const FString& mIpAddress, int32 port, /*const FTcpSocketDisconnectDelegate& OnDisconnected, const FTcpSocketConnectDelegate& OnConnected,
+	const FTcpSocketReceivedMessageDelegate& OnMessageReceived,*/ int32& connectionID)
 {
 	//DisconnectedDelegate = OnDisconnected;
 	//ConnectedDelegate = OnConnected;
 	//MessageReceivedDelegate = OnMessageReceived;
 
-	ConnectionId = TcpWorkers.Num();
+	connectionID = mTcpWorkers.Num();
 
 	TWeakObjectPtr<ATcpSocketConnection> thisWeakObjPtr = TWeakObjectPtr<ATcpSocketConnection>(this);
-	TSharedRef<FTcpSocketWorker> worker(new FTcpSocketWorker(ipAddress, port, thisWeakObjPtr, ConnectionId, ReceiveBufferSize, SendBufferSize, TimeBetweenTicks));
-	TcpWorkers.Add(ConnectionId, worker);
+	TSharedRef<FTcpSocketWorker> worker(new FTcpSocketWorker(mIpAddress, port, thisWeakObjPtr, connectionID, ReceiveBufferSize, SendBufferSize, TimeBetweenTicks));
+	mTcpWorkers.Add(connectionID, worker);
 	worker->Start();
 }
 
-void ATcpSocketConnection::Disconnect(int32 ConnectionId)
+void ATcpSocketConnection::Disconnect(int32 connectionID)
 {
-	auto worker = TcpWorkers.Find(ConnectionId);
+	auto worker = mTcpWorkers.Find(connectionID);
 	if (worker)
 	{
 		UE_LOG(LogTemp, Log, TEXT("Tcp Socket: Disconnected from server."));
 		worker->Get().Stop();
-		TcpWorkers.Remove(ConnectionId);
+		mTcpWorkers.Remove(connectionID);
 	}
 }
 
-bool ATcpSocketConnection::SendData(int32 ConnectionId /*= 0*/, TArray<uint8> DataToSend)
+bool ATcpSocketConnection::SendData(int32 connectionID /*= 0*/, TArray<uint8> dataToSend)
 {
-	if (TcpWorkers.Contains(ConnectionId))
+	if (mTcpWorkers.Contains(connectionID))
 	{
-		if (TcpWorkers[ConnectionId]->isConnected())
+		if (mTcpWorkers[connectionID]->isConnected())
 		{
-			TcpWorkers[ConnectionId]->AddToOutbox(DataToSend);
+			mTcpWorkers[connectionID]->AddToOutbox(dataToSend);
 			return true;
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Log: Socket %d isn't connected"), ConnectionId);
+			UE_LOG(LogTemp, Warning, TEXT("Log: Socket %d isn't connected"), connectionID);
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Log, TEXT("Log: SocketId %d doesn't exist"), ConnectionId);
+		UE_LOG(LogTemp, Log, TEXT("Log: SocketId %d doesn't exist"), connectionID);
 	}
 	return false;
 }
 
-void ATcpSocketConnection::ExecuteOnMessageReceived(int32 ConnectionId, TWeakObjectPtr<ATcpSocketConnection> thisObj)
+void ATcpSocketConnection::ExecuteOnMessageReceived(int32 connectionID, TWeakObjectPtr<ATcpSocketConnection> thisObj)
 {
 	// the second check is for when we quit PIE, we may get a message about a disconnect, but it's too late to act on it, because the thread has already been killed
 	if (!thisObj.IsValid())
@@ -101,16 +103,16 @@ void ATcpSocketConnection::ExecuteOnMessageReceived(int32 ConnectionId, TWeakObj
 	// 1 connect with both clients
 	// 2 stop PIE
 	// 3 close editor
-	if (!TcpWorkers.Contains(ConnectionId)) {
+	if (!mTcpWorkers.Contains(connectionID)) {
 		return;
 	}
 
-	TArray<uint8> msg = TcpWorkers[ConnectionId]->ReadFromInbox();
+	TArray<uint8> msg = mTcpWorkers[connectionID]->ReadFromInbox();
 	bool isBound = MessageReceivedDelegate.IsBound();
-	MessageReceivedDelegate.ExecuteIfBound(ConnectionId, msg);
+	MessageReceivedDelegate.ExecuteIfBound(connectionID, msg);
 }
 
-TArray<uint8> ATcpSocketConnection::Concat_BytesBytes(TArray<uint8> A, TArray<uint8 > B)
+TArray<uint8> ATcpSocketConnection::ConcatBytesBytes(TArray<uint8> A, TArray<uint8 > B)
 {
 	TArray<uint8> ArrayResult;
 
@@ -127,7 +129,7 @@ TArray<uint8> ATcpSocketConnection::Concat_BytesBytes(TArray<uint8> A, TArray<ui
 	return ArrayResult;
 }
 
-TArray<uint8> ATcpSocketConnection::Conv_IntToBytes(int32 InInt)
+TArray<uint8> ATcpSocketConnection::ConvIntToBytes(int32 InInt)
 {
 	TArray<uint8> result;
 	for (int i = 0; i < 4; i++)
@@ -137,7 +139,7 @@ TArray<uint8> ATcpSocketConnection::Conv_IntToBytes(int32 InInt)
 	return result;
 }
 
-TArray<uint8> ATcpSocketConnection::Conv_Int16ToBytes(int16 InInt)
+TArray<uint8> ATcpSocketConnection::ConvInt16ToBytes(int16 InInt)
 {
 	TArray<uint8> result;
 	for (int i = 0; i < 2; i++)
@@ -147,7 +149,7 @@ TArray<uint8> ATcpSocketConnection::Conv_Int16ToBytes(int16 InInt)
 	return result;
 }
 
-TArray<uint8> ATcpSocketConnection::Conv_StringToBytes(const FString& InStr)
+TArray<uint8> ATcpSocketConnection::ConvStringToBytes(const FString& InStr)
 {
 	FTCHARToUTF8 Convert(*InStr);
 	int BytesLength = Convert.Length(); //length of the utf-8 string in bytes (when non-latin letters are used, it's longer than just the number of characters)
@@ -165,7 +167,7 @@ TArray<uint8> ATcpSocketConnection::Conv_StringToBytes(const FString& InStr)
 	return result;
 }
 
-TArray<uint8> ATcpSocketConnection::Conv_FloatToBytes(float InFloat)
+TArray<uint8> ATcpSocketConnection::ConvFloatToBytes(float InFloat)
 {
 	TArray<uint8> result;
 
@@ -177,13 +179,13 @@ TArray<uint8> ATcpSocketConnection::Conv_FloatToBytes(float InFloat)
 	return result;
 }
 
-TArray<uint8> ATcpSocketConnection::Conv_ByteToBytes(uint8 InByte)
+TArray<uint8> ATcpSocketConnection::ConvByteToBytes(uint8 inByte)
 {
-	TArray<uint8> result{ InByte };
+	TArray<uint8> result{ inByte };
 	return result;
 }
 
-int32 ATcpSocketConnection::Message_ReadInt(TArray<uint8>& Message)
+int32 ATcpSocketConnection::PopInt(TArray<uint8>& Message)
 {
 	if (Message.Num() < 4)
 	{
@@ -205,7 +207,7 @@ int32 ATcpSocketConnection::Message_ReadInt(TArray<uint8>& Message)
 	return result;
 }
 
-int16 ATcpSocketConnection::Message_ReadInt16(TArray<uint8>& Message)
+int16 ATcpSocketConnection::PopInt16(TArray<uint8>& Message)
 {
 	if (Message.Num() < 2)
 	{
@@ -227,7 +229,7 @@ int16 ATcpSocketConnection::Message_ReadInt16(TArray<uint8>& Message)
 	return result;
 }
 
-uint8 ATcpSocketConnection::Message_ReadByte(TArray<uint8>& Message)
+uint8 ATcpSocketConnection::PopByte(TArray<uint8>& Message)
 {
 	if (Message.Num() < 1)
 	{
@@ -240,20 +242,20 @@ uint8 ATcpSocketConnection::Message_ReadByte(TArray<uint8>& Message)
 	return result;
 }
 
-bool ATcpSocketConnection::Message_ReadBytes(int32 NumBytes, TArray<uint8>& Message, TArray<uint8>& returnArray)
+bool ATcpSocketConnection::PopBytes(int32 NumBytes, TArray<uint8>& Message, TArray<uint8>& returnArray)
 {
 	if (Message.Num() <= 0)
 		return false;
 	for (int i = 0; i < NumBytes; i++) {
 		if (Message.Num() >= 1)
-			returnArray.Add(Message_ReadByte(Message));
+			returnArray.Add(PopByte(Message));
 		//else
 		//	return false;
 	}
 	return true;
 }
 
-float ATcpSocketConnection::Message_ReadFloat(TArray<uint8>& Message)
+float ATcpSocketConnection::PopFloat(TArray<uint8>& Message)
 {
 	if (Message.Num() < 4)
 	{
@@ -275,7 +277,7 @@ float ATcpSocketConnection::Message_ReadFloat(TArray<uint8>& Message)
 	return result;
 }
 
-FString ATcpSocketConnection::Message_ReadString(TArray<uint8>& Message, int32 BytesLength)
+FString ATcpSocketConnection::PopString(TArray<uint8>& Message, int32 BytesLength)
 {
 	if (BytesLength <= 0)
 	{
@@ -302,10 +304,41 @@ FString ATcpSocketConnection::Message_ReadString(TArray<uint8>& Message, int32 B
 	return FString(UTF8_TO_TCHAR(cstr.c_str()));
 }
 
-bool ATcpSocketConnection::isConnected(int32 ConnectionId)
+TArray<uint8> ATcpSocketConnection::SerializeObject(UObject* target)
 {
-	if (TcpWorkers.Contains(ConnectionId))
-		return TcpWorkers[ConnectionId]->isConnected();
+	TArray<uint8> bytes;
+	FMemoryWriter memoryWriter(bytes, true);
+	FObjectAndNameAsStringProxyArchive ar(memoryWriter, false);
+	target->Serialize(ar);
+
+	return bytes;
+}
+
+void ATcpSocketConnection::DeserializeObject(UObject* target, TArray<uint8> bytes)
+{
+	FMemoryReader memoryReader(bytes, true);
+	FObjectAndNameAsStringProxyArchive ar(memoryReader, false);
+	target->Serialize(ar);
+}
+template<typename InStructType>
+FString& ATcpSocketConnection::SerializeStructToJson(const InStructType& object)
+{
+	FString retJson;
+
+	FJsonObjectConverter::UStructToJsonObjectString(object, retJson, 0, 0);
+
+	return retJson;
+}
+template<typename InStructType>
+void ATcpSocketConnection::DeserializeJsonToStruct(InStructType* target, const FString& json)
+{
+	FJsonObjectConverter::JsonObjectStringToUStruct(json, target, 0, 0);
+}
+
+bool ATcpSocketConnection::IsConnected(int32 connectionID)
+{
+	if (mTcpWorkers.Contains(connectionID))
+		return mTcpWorkers[connectionID]->isConnected();
 	return false;
 }
 
@@ -339,9 +372,9 @@ void ATcpSocketConnection::ExecuteOnDisconnected(int32 WorkerId, TWeakObjectPtr<
 	if (!thisObj.IsValid())
 		return;
 
-	if (TcpWorkers.Contains(WorkerId))
+	if (mTcpWorkers.Contains(WorkerId))
 	{
-		TcpWorkers.Remove(WorkerId);
+		mTcpWorkers.Remove(WorkerId);
 	}
 	DisconnectedDelegate.ExecuteIfBound(WorkerId);
 }
@@ -349,17 +382,17 @@ void ATcpSocketConnection::ExecuteOnDisconnected(int32 WorkerId, TWeakObjectPtr<
 bool FTcpSocketWorker::isConnected()
 {
 	///FScopeLock ScopeLock(&SendCriticalSection);
-	return bConnected;
+	return mIsConnected;
 }
 
 FTcpSocketWorker::FTcpSocketWorker(FString inIp, const int32 inPort, TWeakObjectPtr<ATcpSocketConnection> InOwner, int32 inId, int32 inRecvBufferSize, int32 inSendBufferSize, float inTimeBetweenTicks)
-	: ipAddress(inIp)
-	, port(inPort)
-	, ThreadSpawnerActor(InOwner)
-	, id(inId)
-	, RecvBufferSize(inRecvBufferSize)
-	, SendBufferSize(inSendBufferSize)
-	, TimeBetweenTicks(inTimeBetweenTicks)
+	: mIpAddress(inIp)
+	, mPort(inPort)
+	, mThreadSpawnerActor(InOwner)
+	, mID(inId)
+	, mRecvBufferSize(inRecvBufferSize)
+	, mSendBufferSize(inSendBufferSize)
+	, mTimeBetweenTicks(inTimeBetweenTicks)
 {
 
 }
@@ -384,26 +417,26 @@ void FTcpSocketWorker::Start()
 	{
 		UE_LOG(LogTemp, Log, TEXT("Log: Thread isn't null. It's: %s"), *Thread->GetThreadName());
 	}
-	Thread = FRunnableThread::Create(this, *FString::Printf(TEXT("FTcpSocketWorker %s:%d"), *ipAddress, port), 128 * 1024, TPri_Normal);
+	Thread = FRunnableThread::Create(this, *FString::Printf(TEXT("FTcpSocketWorker %s:%d"), *mIpAddress, mPort), 128 * 1024, TPri_Normal);
 	UE_LOG(LogTemp, Log, TEXT("Log: Created thread"));
 }
 
 void FTcpSocketWorker::AddToOutbox(TArray<uint8> Message)
 {
-	Outbox.Enqueue(Message);
+	mOutbox.Enqueue(Message);
 }
 
 TArray<uint8> FTcpSocketWorker::ReadFromInbox()
 {
 	TArray<uint8> msg;
-	Inbox.Dequeue(msg);
+	mInbox.Dequeue(msg);
 	return msg;
 }
 
 bool FTcpSocketWorker::Init()
 {
-	bRun = true;
-	bConnected = false;
+	mIsRun = true;
+	mIsConnected = false;
 	return true;
 }
 
@@ -411,72 +444,72 @@ uint32 FTcpSocketWorker::Run()
 {
 	AsyncTask(ENamedThreads::GameThread, []() {	ATcpSocketConnection::PrintToConsole("Starting Tcp socket thread.", false); });
 
-	while (bRun)
+	while (mIsRun)
 	{
 		FDateTime timeBeginningOfTick = FDateTime::UtcNow();
 
 		// Connect
-		if (!bConnected)
+		if (!mIsConnected)
 		{
-			Socket = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateSocket(NAME_Stream, TEXT("default"), false);
-			if (!Socket)
+			mSocket = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateSocket(NAME_Stream, TEXT("default"), false);
+			if (!mSocket)
 			{
 				return 0;
 			}
 
-			Socket->SetReceiveBufferSize(RecvBufferSize, ActualRecvBufferSize);
-			Socket->SetSendBufferSize(SendBufferSize, ActualSendBufferSize);
+			mSocket->SetReceiveBufferSize(mRecvBufferSize, mActualRecvBufferSize);
+			mSocket->SetSendBufferSize(mSendBufferSize, mActualSendBufferSize);
 
 			FIPv4Address ip;
-			FIPv4Address::Parse(ipAddress, ip);
+			FIPv4Address::Parse(mIpAddress, ip);
 
 			TSharedRef<FInternetAddr> internetAddr = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM)->CreateInternetAddr();
 			internetAddr->SetIp(ip.Value);
-			internetAddr->SetPort(port);
+			internetAddr->SetPort(mPort);
 
-			bConnected = Socket->Connect(*internetAddr);
-			if (bConnected)
+			mIsConnected = mSocket->Connect(*internetAddr);
+			if (mIsConnected)
 			{
 				AsyncTask(ENamedThreads::GameThread, [this]() {
-					ThreadSpawnerActor.Get()->ExecuteOnConnected(id, ThreadSpawnerActor);
+					mThreadSpawnerActor.Get()->ExecuteOnConnected(mID, mThreadSpawnerActor);
 					});
 			}
 			else
 			{
 				AsyncTask(ENamedThreads::GameThread, []() { ATcpSocketConnection::PrintToConsole(FString::Printf(TEXT("Couldn't connect to server. TcpSocketConnection.cpp: line %d"), __LINE__), true); });
-				bRun = false;
+				mIsRun = false;
 			}
 			continue;
 		}
 
-		if (!Socket)
+		if (!mSocket)
 		{
 			AsyncTask(ENamedThreads::GameThread, []() { ATcpSocketConnection::PrintToConsole(FString::Printf(TEXT("Socket is null. TcpSocketConnection.cpp: line %d"), __LINE__), true); });
-			bRun = false;
+			mIsRun = false;
 			continue;
 		}
 
 		// check if we weren't disconnected from the socket
-		Socket->SetNonBlocking(true); // set to NonBlocking, because Blocking can't check for a disconnect for some reason
+		mSocket->SetNonBlocking(true); // set to NonBlocking, because Blocking can't check for a disconnect for some reason
 		int32 t_BytesRead;
 		uint8 t_Dummy;
-		if (!Socket->Recv(&t_Dummy, 1, t_BytesRead, ESocketReceiveFlags::Peek))
+		if (!mSocket->Recv(&t_Dummy, 1, t_BytesRead, ESocketReceiveFlags::Peek))
 		{
-			bRun = false;
+			mIsRun = false;
 			continue;
 		}
-		Socket->SetNonBlocking(false);	// set back to Blocking
+		mSocket->SetNonBlocking(false);	// set back to Blocking
 
 		// if Outbox has something to send, send it
-		while (!Outbox.IsEmpty())
+		while (!mOutbox.IsEmpty())
 		{
 			TArray<uint8> toSend;
-			Outbox.Dequeue(toSend);
+			mOutbox.Dequeue(toSend);
 
 			if (!BlockingSend(toSend.GetData(), toSend.Num()))
 			{
 				// if sending failed, stop running the thread
-				bRun = false;
+				mIsRun = false;
 				UE_LOG(LogTemp, Log, TEXT("TCP send data failed !"));
 				continue;
 			}
@@ -488,9 +521,9 @@ uint32 FTcpSocketWorker::Run()
 
 		int32 BytesReadTotal = 0;
 		// keep going until we have no data.
-		while (bRun)
+		while (mIsRun)
 		{
-			if (!Socket->HasPendingData(PendingDataSize))
+			if (!mSocket->HasPendingData(PendingDataSize))
 			{
 				// no messages
 				break;
@@ -501,7 +534,7 @@ uint32 FTcpSocketWorker::Run()
 			receivedData.SetNumUninitialized(BytesReadTotal + PendingDataSize);
 
 			int32 BytesRead = 0;
-			if (!Socket->Recv(receivedData.GetData() + BytesReadTotal, PendingDataSize, BytesRead))
+			if (!mSocket->Recv(receivedData.GetData() + BytesReadTotal, PendingDataSize, BytesRead))
 			{
 				// ISocketSubsystem* SocketSubsystem = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
 				// error code: (int32)SocketSubsystem->GetLastErrorCode()
@@ -516,11 +549,11 @@ uint32 FTcpSocketWorker::Run()
 		}
 
 		// if we received data, inform the main thread about it, so it can read TQueue
-		if (bRun && receivedData.Num() != 0)
+		if (mIsRun && receivedData.Num() != 0)
 		{
-			Inbox.Enqueue(receivedData);
+			mInbox.Enqueue(receivedData);
 			AsyncTask(ENamedThreads::GameThread, [this]() {
-				ThreadSpawnerActor.Get()->ExecuteOnMessageReceived(id, ThreadSpawnerActor);
+				mThreadSpawnerActor.Get()->ExecuteOnMessageReceived(mID, mThreadSpawnerActor);
 				});
 		}
 
@@ -528,7 +561,7 @@ uint32 FTcpSocketWorker::Run()
 		FDateTime timeEndOfTick = FDateTime::UtcNow();
 		FTimespan tickDuration = timeEndOfTick - timeBeginningOfTick;
 		float secondsThisTickTook = tickDuration.GetTotalSeconds();
-		float timeToSleep = TimeBetweenTicks - secondsThisTickTook;
+		float timeToSleep = mTimeBetweenTicks - secondsThisTickTook;
 		if (timeToSleep > 0.f)
 		{
 			//AsyncTask(ENamedThreads::GameThread, [timeToSleep]() { ATcpSocketConnection::PrintToConsole(FString::Printf(TEXT("Sleeping: %f seconds"), timeToSleep), false); });
@@ -536,17 +569,17 @@ uint32 FTcpSocketWorker::Run()
 		}
 	}
 
-	bConnected = false;
+	mIsConnected = false;
 
 	AsyncTask(ENamedThreads::GameThread, [this]() {
-		ThreadSpawnerActor.Get()->ExecuteOnDisconnected(id, ThreadSpawnerActor);
+		mThreadSpawnerActor.Get()->ExecuteOnDisconnected(mID, mThreadSpawnerActor);
 		});
 
 	SocketShutdown();
-	if (Socket)
+	if (mSocket)
 	{
-		delete Socket;
-		Socket = nullptr;
+		delete mSocket;
+		mSocket = nullptr;
 	}
 
 	return 0;
@@ -554,7 +587,7 @@ uint32 FTcpSocketWorker::Run()
 
 void FTcpSocketWorker::Stop()
 {
-	bRun = false;
+	mIsRun = false;
 }
 
 void FTcpSocketWorker::Exit()
@@ -567,7 +600,7 @@ bool FTcpSocketWorker::BlockingSend(const uint8* Data, int32 BytesToSend)
 	if (BytesToSend > 0)
 	{
 		int32 BytesSent = 0;
-		if (!Socket->Send(Data, BytesToSend, BytesSent))
+		if (!mSocket->Send(Data, BytesToSend, BytesSent))
 		{
 			return false;
 		}
@@ -578,8 +611,8 @@ bool FTcpSocketWorker::BlockingSend(const uint8* Data, int32 BytesToSend)
 void FTcpSocketWorker::SocketShutdown()
 {
 	// if there is still a socket, close it so our peer will get a quick disconnect notification
-	if (Socket)
+	if (mSocket)
 	{
-		Socket->Close();
+		mSocket->Close();
 	}
 }

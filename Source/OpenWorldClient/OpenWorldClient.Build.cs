@@ -8,7 +8,7 @@ public class OpenWorldClient : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "HeadMountedDisplay", "UMG" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "HeadMountedDisplay", "UMG",  "Json", "JsonUtilities" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] {"Slate", "SlateCore", "Sockets", "Networking" });
 	}

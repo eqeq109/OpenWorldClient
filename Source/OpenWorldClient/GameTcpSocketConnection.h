@@ -132,6 +132,8 @@ struct OPENWORLDCLIENT_API FPacketSetNicknameAck
 public:
 	UPROPERTY()
 		FString UserName;
+	UPROPERTY()
+		int16 ResultType;
 };
 
 USTRUCT()
@@ -166,7 +168,7 @@ enum class EProtocolType
 	PlayerMoveReq,
 	PlayerMoveAck,
 	CharacterMove,
-	SetNicknameAck,
 	SetNicknameReq,
+	SetNicknameAck,
 	End
 };
