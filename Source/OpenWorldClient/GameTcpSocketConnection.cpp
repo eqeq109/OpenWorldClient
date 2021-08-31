@@ -79,20 +79,24 @@ void AGameTcpSocketConnection::OnMessageReceived(int32 conId, TArray<uint8>& mes
 			ChatMessageDelegate.ExecuteIfBound(stringData);
 		}
 			break;
-		case EProtocolType::SetNicknameAck:
+		case EProtocolType::ConnectAck:
 		{
-			//AOpenWorldClientGameMode* gameMode = (AOpenWorldClientGameMode*)GetWorld()->GetAuthGameMode();
+			AOpenWorldClientGameMode* gameMode = (AOpenWorldClientGameMode*)GetWorld()->GetAuthGameMode();
 			int16 msgLength = PopInt16(body);
 
 			stringData = PopString(body, msgLength);
-			FPacketSetNicknameAck ack;
+			FPacketConnectAck ack;
 			//DeserializeJsonToStruct(&ack, stringData);
 			FJsonObjectConverter::JsonObjectStringToUStruct(stringData, &ack, 0, 0);
-			//gameMode->OnSendNicknameAck(ack.UserName);
-			//FBufferArchive archive();
-			//ack.StaticStruct().serial
-			//DeserializeObject((UObject)ack);
-			//ack.StaticStruct()
+
+			if (ack.ResultType == 1)
+			{
+				//닉네임 처리
+			}
+
+			// 필드정보를 통해 핃드 셋팅(유저 데이터)
+
+
 			UE_LOG(LogTemp, Log, TEXT("Log: Received message"));
 		}
 			break;
@@ -129,11 +133,13 @@ void AGameTcpSocketConnection::SendMessage(const FString& message)
 	SendData(0, buffer);
 }
 
-void AGameTcpSocketConnection::SendMove(const FVector& pos, const FRotator& rot)
+void AGameTcpSocketConnection::SendMove(const int16 moveState, const FVector& pos, const FRotator& rot)
 {
 	UE_LOG(LogTemp, Log, TEXT("Log: SendMove"));
 
 	FPacketPlayerMoveReq packet;
+
+	packet.MoveState = (int16)moveState;
 	packet.X = pos.X;
 	packet.Y = pos.Y;
 	packet.Z = pos.Z;
@@ -169,7 +175,7 @@ void AGameTcpSocketConnection::SendNickname(const FString& message)
 	TArray<uint8> temp;
 
 	//프로토콜 타입
-	int16 type = (int16)EProtocolType::SetNicknameReq;
+	int16 type = (int16)EProtocolType::ConnectReq;
 	TArray<uint8> typeToBytes = ConvInt16ToBytes(type);
 	temp.Append(typeToBytes);
 

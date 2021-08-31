@@ -33,7 +33,7 @@ public:
 	UFUNCTION()
 		void SendMessage(const FString& message);
 	UFUNCTION()
-		void SendMove(const FVector& pos, const FRotator& rot);
+		void SendMove(const int16 moveState, const FVector& pos, const FRotator& rot);
 	UFUNCTION()
 		void SendNickname(const FString& message);
 	UPROPERTY()
@@ -55,7 +55,7 @@ struct OPENWORLDCLIENT_API FPacketChatMessageReq
 	GENERATED_USTRUCT_BODY()
 public:
 	UPROPERTY()
-	FString Message;
+		FString Message;
 
 };
 
@@ -76,18 +76,20 @@ struct OPENWORLDCLIENT_API FPacketPlayerMoveReq
 public:
 	//FVector
 	UPROPERTY()
-	float X;
+		int16 MoveState;
 	UPROPERTY()
-	float Y;
+		float X;
 	UPROPERTY()
-	float Z;
+		float Y;
+	UPROPERTY()
+		float Z;
 	//FRotator
 	UPROPERTY()
-	float Pitch;
+		float Pitch;
 	UPROPERTY()
-	float Yaw;
+		float Yaw;
 	UPROPERTY()
-	float Roll;
+		float Roll;
 };
 
 USTRUCT()
@@ -96,21 +98,21 @@ struct OPENWORLDCLIENT_API FPacketCharacterMove
 	GENERATED_USTRUCT_BODY()
 public:
 	UPROPERTY()
-	int Index;
+		int Index;
 	//FVector
 	UPROPERTY()
-	float X;
+		float X;
 	UPROPERTY()
-	float Y;
+		float Y;
 	UPROPERTY()
-	float Z;
+		float Z;
 	//FRotator
 	UPROPERTY()
-	float Pitch;
+		float Pitch;
 	UPROPERTY()
-	float Yaw;
+		float Yaw;
 	UPROPERTY()
-	float Roll;
+		float Roll;
 };
 
 USTRUCT()
@@ -119,11 +121,11 @@ struct OPENWORLDCLIENT_API FPacketMyConnectAck
 	GENERATED_USTRUCT_BODY()
 public:
 	UPROPERTY()
-	FString UserName;
+		FString UserName;
 	UPROPERTY()
-	FVector StartPos;
+		FVector StartPos;
 	UPROPERTY()
-	FRotator Rotation;
+		FRotator Rotation;
 };
 USTRUCT()
 struct OPENWORLDCLIENT_API FPacketSetNicknameAck
@@ -151,11 +153,46 @@ struct OPENWORLDCLIENT_API FPacketNewClientAck
 	GENERATED_USTRUCT_BODY()
 public:
 	UPROPERTY()
-	int Index;
+		int Index;
 
 	UPROPERTY()
 		FString UserName;
 };
+
+
+USTRUCT()
+struct OPENWORLDCLIENT_API FFieldUserData
+{
+	GENERATED_USTRUCT_BODY()
+
+public:
+	UPROPERTY()
+		int UserIndex;
+	UPROPERTY()
+		FString UserName;
+	UPROPERTY()
+		FVector Position;
+	UPROPERTY()
+		FRotator Rotation;
+
+};
+
+USTRUCT()
+struct OPENWORLDCLIENT_API FPacketConnectAck
+{
+	GENERATED_USTRUCT_BODY()
+
+public:
+	UPROPERTY()
+		FString MyName;
+	UPROPERTY()
+		int16 ResultType;
+	UPROPERTY()
+		TArray<FFieldUserData> UserList;
+
+};
+
+
 
 enum class EProtocolType
 {
@@ -170,5 +207,15 @@ enum class EProtocolType
 	CharacterMove,
 	SetNicknameReq,
 	SetNicknameAck,
+	End
+};
+
+
+enum class EMoveState
+{
+	Begin = 0,
+	Idle = 1,
+	MoveStart = 2,
+	Jump = 3,
 	End
 };

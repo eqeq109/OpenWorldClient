@@ -147,5 +147,5 @@ void AOpenWorldClientCharacter::SendMovementData()
 {
 	UOpenWorldGameInstance* gameInstance = GetGameInstance<UOpenWorldGameInstance>();
 
-	gameInstance->OpenWorldConnection->SendMove(AActor::GetActorLocation(), AActor::GetActorRotation());
+	gameInstance->OpenWorldConnection->SendMove((int16)EMoveState::MoveStart, AActor::GetActorLocation(), AActor::GetActorRotation());
 }
