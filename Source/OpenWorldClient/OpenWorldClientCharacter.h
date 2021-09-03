@@ -58,7 +58,7 @@ protected:
 	/** Handler for when a touch input stops. */
 	void TouchStopped(ETouchIndex::Type FingerIndex, FVector Location);
 
-	void SendMovementData();
+	void SendMovementData(const EMoveState& moveState);
 
 protected:
 	// APawn interface

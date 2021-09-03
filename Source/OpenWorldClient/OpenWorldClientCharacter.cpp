@@ -94,6 +94,7 @@ void AOpenWorldClientCharacter::OnResetVR()
 void AOpenWorldClientCharacter::TouchStarted(ETouchIndex::Type FingerIndex, FVector Location)
 {
 		Jump();
+		SendMovementData(EMoveState::Jump);
 }
 
 void AOpenWorldClientCharacter::TouchStopped(ETouchIndex::Type FingerIndex, FVector Location)
@@ -124,7 +125,7 @@ void AOpenWorldClientCharacter::MoveForward(float Value)
 		// get forward vector
 		const FVector Direction = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
 		AddMovementInput(Direction, Value);
-		SendMovementData();
+		SendMovementData(EMoveState::MoveStart);
 	}
 }
 
@@ -140,12 +141,13 @@ void AOpenWorldClientCharacter::MoveRight(float Value)
 		const FVector Direction = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 		// add movement in that direction
 		AddMovementInput(Direction, Value);
+		SendMovementData(EMoveState::MoveStart);
 	}
 }
 
-void AOpenWorldClientCharacter::SendMovementData()
+void AOpenWorldClientCharacter::SendMovementData(const EMoveState& moveState)
 {
 	UOpenWorldGameInstance* gameInstance = GetGameInstance<UOpenWorldGameInstance>();
 
-	gameInstance->OpenWorldConnection->SendMove((int16)EMoveState::MoveStart, AActor::GetActorLocation(), AActor::GetActorRotation());
+	gameInstance->OpenWorldConnection->SendMove((int16)moveState, AActor::GetActorLocation(), AActor::GetActorRotation());
 }
