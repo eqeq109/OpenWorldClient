@@ -4,7 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "OpenWorldClient/GameTcpSocketConnection.h"
 #include "OpenWorldClientCharacter.generated.h"
+
 
 UCLASS(config=Game)
 class AOpenWorldClientCharacter : public ACharacter

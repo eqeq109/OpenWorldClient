@@ -5,7 +5,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "MainHUD.h"
 #include "OpenWorldClientGameMode.h"
-#include <OpenWorldClient/GameTcpSocketConnection.h>
+#include "OpenWorldClient/GameTcpSocketConnection.h"
 #include <OpenWorldClient/OpenWorldGameInstance.h>
 
 void AMainControllerPC::BeginPlay()
@@ -59,10 +59,13 @@ void AMainControllerPC::SendServerMessage(const FString& message)
 	gameInstance->OpenWorldConnection->SendMessage(message);
 }
 
-void AMainControllerPC::ReceiveMessage(const FString& message)
+void AMainControllerPC::ReceiveMessage(const FPacketChatMessageArrived& ack)
 {
 	AMainHUD* hud = GetHUD<AMainHUD>();
 	if (hud == nullptr) return;
 
-	hud->AddChatMessage(message);
+	//TODO: 접속시에 받은 필드데이터 기반으로 닉네임과 메시지를 조합하여 출력
+	FString fullMessage = ack.Message;
+
+	hud->AddChatMessage(fullMessage);
 }

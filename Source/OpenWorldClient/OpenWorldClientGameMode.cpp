@@ -25,7 +25,11 @@ AOpenWorldClientGameMode::AOpenWorldClientGameMode()
 void AOpenWorldClientGameMode::BeginPlay()
 {
 	Super::BeginPlay();
+	UOpenWorldGameInstance* gameInstance = GetGameInstance<UOpenWorldGameInstance>();
+	
 	ChangeMenuWidget(StartingWidgetClass);
+
+	gameInstance->OpenWorldConnection->SetNicknameAckDelegate.BindUObject(this, &AOpenWorldClientGameMode::OnSendNicknameAck);
 	//OpenWorldConnection = NewObject<AGameTcpSocketConnection>();
 }
 

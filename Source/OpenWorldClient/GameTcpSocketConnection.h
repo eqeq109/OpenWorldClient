@@ -11,7 +11,8 @@
 #include "UObject/WeakObjectPtrTemplates.h"
 #include "GameTcpSocketConnection.generated.h"
 
-using FChatMessageDelegate = TDelegate<void(const FString& message)>;
+using FChatMessageDelegate = TDelegate<void(const FPacketChatMessageArrived& ack)>;
+using FSetNicknameAckDelegate = TDelegate<void(const FString& nick)>;
 
 /**
  *
@@ -41,6 +42,8 @@ public:
 
 
 	FChatMessageDelegate ChatMessageDelegate;
+
+	FSetNicknameAckDelegate SetNicknameAckDelegate;
 	//UPROPERTY()
 	//FTcpSocketDisconnectDelegate DisconnectDelegate;
 	//UPROPERTY()
@@ -192,7 +195,19 @@ public:
 
 };
 
+USTRUCT()
+struct OPENWORLDCLIENT_API FPacketChatMessageArrived
+{
+	GENERATED_USTRUCT_BODY()
 
+public:
+	UPROPERTY()
+		int16 ChatMsgType;
+	UPROPERTY()
+		int32 OwnerIndex;
+	UPROPERTY()
+		FString Message;
+};
 
 enum class EProtocolType
 {

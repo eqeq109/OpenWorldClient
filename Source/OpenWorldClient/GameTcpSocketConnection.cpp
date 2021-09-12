@@ -26,22 +26,20 @@ void AGameTcpSocketConnection::ConnectToGameServer()
 		UE_LOG(LogTemp, Log, TEXT("Log: Can't connect Second time. We're already connected!"));
 		return;
 	}
-
 	
 	DisconnectedDelegate.BindUObject(this, &AGameTcpSocketConnection::OnDisconnected);
-
 	ConnectedDelegate.BindUObject(this, &AGameTcpSocketConnection::OnConnected);
 	MessageReceivedDelegate.BindUObject(this, &AGameTcpSocketConnection::OnMessageReceived);
 
-	Connect("222.107.110.135", 9000, ConnectionIdGameServer);
+	Connect("222.107.145.1", 9000, ConnectionIdGameServer);
 }
 
-void AGameTcpSocketConnection::OnConnected(int32 conId)
+void AGameTcpSocketConnection::OnConnected(int32 conID)
 {
 	UE_LOG(LogTemp, Log, TEXT("Log: Connected to server"));
 }
 
-void AGameTcpSocketConnection::OnDisconnected(int32 conId)
+void AGameTcpSocketConnection::OnDisconnected(int32 conID)
 {
 	UE_LOG(LogTemp, Log, TEXT("Log: Disconnected"));
 }
@@ -51,7 +49,7 @@ void AGameTcpSocketConnection::OnDisconnected(int32 conId)
 /// </summary>
 /// <param name="ConId"></param>
 /// <param name="Message"></param>
-void AGameTcpSocketConnection::OnMessageReceived(int32 conId, TArray<uint8>& message)
+void AGameTcpSocketConnection::OnMessageReceived(int32 conID, TArray<uint8>& message)
 {
 	UE_LOG(LogTemp, Log, TEXT("Log: Received message"));
 
@@ -76,12 +74,17 @@ void AGameTcpSocketConnection::OnMessageReceived(int32 conId, TArray<uint8>& mes
 
 			stringData = PopString(body, msgLength);
 
-			ChatMessageDelegate.ExecuteIfBound(stringData);
+			FPacketChatMessageArrived ack;
+
+			FJsonObjectConverter::JsonObjectStringToUStruct(stringData, &ack, 0, 0);
+
+			ChatMessageDelegate.ExecuteIfBound(ack);
 		}
 			break;
 		case EProtocolType::ConnectAck:
 		{
-			AOpenWorldClientGameMode* gameMode = (AOpenWorldClientGameMode*)GetWorld()->GetAuthGameMode();
+			
+
 			int16 msgLength = PopInt16(body);
 
 			stringData = PopString(body, msgLength);
@@ -89,12 +92,15 @@ void AGameTcpSocketConnection::OnMessageReceived(int32 conId, TArray<uint8>& mes
 			//DeserializeJsonToStruct(&ack, stringData);
 			FJsonObjectConverter::JsonObjectStringToUStruct(stringData, &ack, 0, 0);
 
+			
+
 			if (ack.ResultType == 1)
 			{
 				//닉네임 처리
+				SetNicknameAckDelegate.ExecuteIfBound(ack.MyName);
 			}
 
-			// 필드정보를 통해 핃드 셋팅(유저 데이터)
+			// TODO: 필드정보를 통해 핃드 셋팅(유저 데이터)
 
 
 			UE_LOG(LogTemp, Log, TEXT("Log: Received message"));

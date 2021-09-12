@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "OpenWorldClient/GameTcpSocketConnection.h"
 #include "MainControllerPC.generated.h"
 
 
@@ -30,7 +31,7 @@ public:
 	//UPROPERTY()
 		//class AGameTcpSocketConnection* OpenWorldConnection;
 	UFUNCTION()
-		void ReceiveMessage(const FString& message);
+		void ReceiveMessage(const FPacketChatMessageArrived& ack);
 
 
 private:
